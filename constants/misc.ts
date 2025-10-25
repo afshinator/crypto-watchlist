@@ -10,3 +10,5 @@ export const FONT_SCALES: Record<FontSizeSetting, number> = {
     'Medium': 1.0, // Default
     'Large': 1.25,
 };
+
+export const DEFAULT_FONT_SETTING: FontSizeSetting = 'Medium';
