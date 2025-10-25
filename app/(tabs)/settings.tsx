@@ -3,62 +3,119 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { FontSizeSetting } from "@/constants/misc";
 import { useFontScaleState } from "@/hooks/use-font-scale";
-import React from "react";
+import { getItem, setItem } from "@/utils/asyncStorage";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, TouchableOpacity } from "react-native"; // View is no longer needed here
 
 // Array of options to iterate over
 const FONT_OPTIONS: FontSizeSetting[] = ["Small", "Medium", "Large"];
 
+const CURRENCY_OPTIONS = [
+  // Major Fiats
+  { code: 'usd', label: 'USD ($)' },
+  { code: 'eur', label: 'EUR (€)' },
+  { code: 'gbp', label: 'GBP (£)' },
+  { code: 'jpy', label: 'JPY (¥)' },
+  { code: 'cad', label: 'CAD' },
+  { code: 'aud', label: 'AUD' },
+  { code: 'chf', label: 'CHF' }, // Swiss Franc
+  { code: 'cny', label: 'CNY (¥)' }, // Chinese Yuan
+  { code: 'inr', label: 'INR (₹)' }, // Indian Rupee
+  { code: 'brl', label: 'BRL (R$)' }, // Brazilian Real
+  { code: 'sgd', label: 'SGD' }, // Singapore Dollar
+  { code: 'hkd', label: 'HKD' }, // Hong Kong Dollar
+  { code: 'sek', label: 'SEK' }, // Swedish Krona
+  { code: 'nzd', label: 'NZD' }, // New Zealand Dollar
+  // Crypto
+  { code: 'btc', label: 'BTC' },
+  { code: 'eth', label: 'ETH' },
+];
+
+const CURRENCY_STORAGE_KEY = '@CurrencyPreference:v1';
+const DEFAULT_CURRENCY = 'usd';
+
+const useCurrencyPreference = () => {
+  const [activeCurrency, setActiveCurrency] = useState(DEFAULT_CURRENCY);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load currency preference from AsyncStorage on mount
+  useEffect(() => {
+    const loadCurrency = async () => {
+      try {
+        const storedCurrency = await getItem(CURRENCY_STORAGE_KEY);
+        if (storedCurrency !== null) {
+          setActiveCurrency(storedCurrency);
+        }
+      } catch (e) {
+        console.error("Failed to load currency setting.", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadCurrency();
+  }, []);
+
+  // Function to set new currency and save it
+  const setCurrency = async (currencyCode) => {
+    try {
+      setActiveCurrency(currencyCode);
+      await setItem(CURRENCY_STORAGE_KEY, currencyCode);
+    } catch (e) {
+      console.error("Failed to save currency setting.", e);
+    }
+  };
+
+  return { activeCurrency, setCurrency, isLoading };
+};
+
+
 export default function SettingsScreen() {
-  // Use the stateful hook to get the current setting and the setter function
-  const { activeSetting, setFontSize, isLoading } = useFontScaleState();
+  const fontScale = useFontScaleState();
+
+  // NEW currency hook
+  const currencyPref = useCurrencyPreference();
+
+  // Combine loading states
+  const isLoading = fontScale.isLoading || currencyPref.isLoading;
 
   if (isLoading) {
     // Simple loading state
     return (
-      // Use ThemedView for the main container
-      <ThemedView style={styles.container}>
+      <ThemedView style={[styles.container, styles.loadingContainer]}>
         <ThemedText type="default">Loading Settings...</ThemedText>
       </ThemedView>
     );
   }
 
   return (
-    // Use ThemedView for the main container
     <ThemedView style={styles.container}>
       <ThemedText type="title" style={styles.header}>
         App Settings
       </ThemedText>
 
-      {/* Use ThemedView for setting rows */}
+      {/* 1. Font Size Preference Setting */}
       <ThemedView style={styles.settingRow}>
         <ThemedText type="subtitle" style={styles.label}>
           Font Size Preference
         </ThemedText>
 
-        {/* Use ThemedView for the option container (was backgroundColor: #f0f0f0) */}
         <ThemedView 
             style={styles.optionContainer}
-            // Optional: You can explicitly set a custom background color 
-            // for light mode if you want a subtle gray tint managed by the theme.
-            // lightColor="#f0f0f0" 
         >
           {FONT_OPTIONS.map((option) => (
             <TouchableOpacity
               key={option}
               style={[
                 styles.optionButton,
-                activeSetting === option && styles.optionSelected,
-                // Removed redundant/misleading fontSize style as it was ineffective on TouchableOpacity
+                fontScale.activeSetting === option && styles.optionSelected,
               ]}
-              onPress={() => setFontSize(option)}
+              onPress={() => fontScale.setFontSize(option)}
             >
               <ThemedText
-                // Use 'default' type but override the size for the button label
                 type="default"
                 style={[
                   styles.optionText,
-                  activeSetting === option && styles.textSelected,
+                  fontScale.activeSetting === option && styles.textSelected,
                 ]}
               >
                 {option}
@@ -67,19 +124,58 @@ export default function SettingsScreen() {
           ))}
         </ThemedView>
       </ThemedView>
-
-      {/* Use ThemedView for the preview container */}
+      
+      {/* Preview Container */}
       <ThemedView style={styles.previewContainer}>
-        {/* Added key prop tied to activeSetting to force ThemedText to re-render and pick up the new scale factor */}
-        <ThemedText type="subtitle" key={`preview-subtitle-${activeSetting}`}>Preview:</ThemedText>
+        {/* Note: The key prop is used to simulate re-rendering based on state change */}
+        <ThemedText type="subtitle" key={`preview-subtitle-${fontScale.activeSetting}`}>Preview:</ThemedText>
         <ThemedText 
             type="default" 
-            key={`preview-text-${activeSetting}`} // Key forces re-initialization of internal hooks
+            key={`preview-text-${fontScale.activeSetting}`}
         >
+          The current price data currency is **{currencyPref.activeCurrency.toUpperCase()}**.
           This text will scale automatically to the size you select above. The
-          current setting is: **{activeSetting}**.
+          current font setting is: **{fontScale.activeSetting}**.
         </ThemedText>
       </ThemedView>
+
+
+      {/* 2. Currency Preference Setting */}
+      <ThemedView style={[styles.settingRow, styles.topMarg]}>
+        <ThemedText type="subtitle" style={styles.label}>
+          Currency Preference
+        </ThemedText>
+
+        <ThemedView 
+            style={[styles.optionContainer, styles.currencyOptionContainer]}
+        >
+          {CURRENCY_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option.code}
+              style={[
+                styles.optionButton,
+                styles.currencyOptionButton,
+                currencyPref.activeCurrency === option.code && styles.optionSelected,
+              ]}
+              onPress={() => currencyPref.setCurrency(option.code)}
+            >
+              <ThemedText
+                type="default"
+                style={[
+                  styles.optionText,
+                  currencyPref.activeCurrency === option.code && styles.textSelected,
+                  styles.currencyOptionText
+                ]}
+              >
+                {option.label}
+              </ThemedText>
+            </TouchableOpacity>
+          ))}
+        </ThemedView>
+      </ThemedView>
+
+
+
     </ThemedView>
   );
 }
@@ -88,23 +184,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    // Removed backgroundColor: "#fff" to let ThemedView handle the background
+
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     marginBottom: 30,
+    fontSize: 24, // Mock title size
+    fontWeight: 'bold',
   },
   settingRow: {
     marginBottom: 40,
   },
+  topMarg: {
+    marginTop: 40,
+  },
   label: {
     marginBottom: 15,
+    fontSize: 16, // Mock subtitle size
+    fontWeight: '600',
   },
   optionContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
-    // Removed backgroundColor: "#f0f0f0" to let ThemedView handle a subtle background tint
     borderRadius: 10,
     padding: 5,
+    flexWrap: 'wrap', 
+    backgroundColor: '#f0f0f0', // Mock subtle background tint
+  },
+  currencyOptionContainer: {
+    paddingHorizontal: 0,
   },
   optionButton: {
     flex: 1,
@@ -113,22 +224,39 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginHorizontal: 4,
   },
+  currencyOptionButton: {
+    flexBasis: '22%',
+    minWidth: 70, 
+    marginVertical: 4,
+    paddingVertical: 8, 
+    marginHorizontal: 2,
+  },
   optionSelected: {
-    backgroundColor: "#0a7ea4", // Primary accent color
+    backgroundColor: "#0a7ea4", 
   },
   optionText: {
     fontWeight: "500",
-    // Removed hardcoded color: "#333" to rely on ThemedText default color
+    color: '#333', // Mock default text color
+  },
+  currencyOptionText: {
+    fontSize: 12,
   },
   textSelected: {
-    color: "#fff", // White text on selected background
+    color: "#fff", 
     fontWeight: "bold",
   },
   previewContainer: {
     padding: 15,
-    // Border color should probably be themed too, but keeping static for now
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 10,
   },
+  // Mock styles for Themed components
+  mockedText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  mockedView: {
+    // Default style for View container
+  }
 });

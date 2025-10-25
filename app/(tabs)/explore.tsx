@@ -118,7 +118,7 @@ export default function TabTwoScreen() {
   return (
     <ThemedView style={styles.container}>
       <ThemedText type="subtitle" style={styles.header}>
-        Top {coinLimit} Crypto Markets (USD)
+        Top {coinLimit} Crypto coins by marketcap (USD)
       </ThemedText>
       
       <View style={styles.buttonRowContainer}>
